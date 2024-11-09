@@ -80,41 +80,43 @@ export const postProducto = async (req, res) => {
 
 // Ruta PUT para actualizar un producto
 export const putProductos = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { prod_codigo, prod_nombre, prod_stock, prod_precio, prod_activo } = req.body;
-    let newProdImagen = req.body.prod_imagen;
+    try {
+        const { id } = req.params;
+        const { prod_codigo, prod_nombre, prod_stock, prod_precio, prod_activo, prod_imagen } = req.body;
 
-    console.log('Datos recibidos para actualizar el producto:', req.body);
+        let newProd_imagen = prod_imagen; // Si ya se pasó una URL de imagen, la usaremos
 
-    // Si se recibió una imagen nueva, procesarla
-    if (req.file) {
-      console.log('Nueva imagen recibida:', req.file);
-      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'uploads',
-        public_id: `${Date.now()}-${req.file.originalname}`
-      });
-      newProdImagen = uploadResult.secure_url; // Actualiza la URL de la imagen
+        // Verificar si se subió una nueva imagen
+        if (req.file) {
+            // Subir la nueva imagen a Cloudinary
+            const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+                folder: 'uploads',
+                public_id: `${Date.now()}-${req.file.originalname}` // Usar un nombre único
+            });
+
+            // Obtener la URL segura de la imagen subida
+            newProd_imagen = uploadResult.secure_url;
+        }
+
+        // Actualizar el producto en la base de datos
+        const [result] = await conmysql.query(
+            'UPDATE productos SET prod_codigo = ?, prod_nombre = ?, prod_stock = ?, prod_precio = ?, prod_activo = ?, prod_imagen = ? WHERE prod_id = ?',
+            [prod_codigo, prod_nombre, prod_stock, prod_precio, prod_activo, newProd_imagen, id]
+        );
+
+        if (result.affectedRows <= 0) {
+            return res.status(404).json({
+                message: 'Producto no encontrado'
+            });
+        }
+      // Obtener el producto actualizado
+        const [rows] = await conmysql.query('SELECT * FROM productos WHERE prod_id = ?', [id]);
+        res.json(rows[0]);
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error del lado del servidor' });
     }
-
-    const [result] = await conmysql.query(
-      `UPDATE productos 
-       SET prod_codigo = ?, prod_nombre = ?, prod_stock = ?, prod_precio = ?, prod_activo = ?, prod_imagen = ? 
-       WHERE prod_id = ?`,
-      [prod_codigo, prod_nombre, prod_stock, prod_precio, prod_activo, newProdImagen, id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Producto no encontrado o no se realizaron cambios' });
-    }
-
-    const [updatedProduct] = await conmysql.query('SELECT * FROM productos WHERE prod_id = ?', [id]);
-    return res.status(200).json(updatedProduct[0]);
-
-  } catch (error) {
-    console.error('Error al actualizar producto:', error);
-    return res.status(500).json({ message: 'Error al actualizar el producto', error: error.message });
-  }
 };
 
 
